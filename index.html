@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sky Rush: Avian Racer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root {
+            --primary: #4ec0ff;
+            --accent: #ffd700;
+            --danger: #ff4757;
+            --dark: #2f3542;
+            --light: #f1f2f6;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--dark);
+            font-family: var(--font-main);
+            color: var(--light);
+            touch-action: none; /* Prevent scroll on mobile */
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #1e90ff, #87cefa);
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0 0 20px 0;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            text-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            background: linear-gradient(to right, var(--accent), #ff9f43);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            text-align: center;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--dark);
+            background: var(--accent);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+            background: #ffeaa7;
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 5;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #final-score {
+            font-size: 3rem;
+            color: var(--accent);
+            margin: 20px 0;
+        }
+
+        /* Bird Selection */
+        .bird-selector {
+            display: flex;
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .bird-card {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            text-align: center;
+            width: 100px;
+        }
+
+        .bird-card:hover, .bird-card.selected {
+            background: rgba(255,255,255,0.2);
+            border-color: var(--accent);
+            transform: translateY(-5px);
+        }
+
+        .bird-preview {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 10px;
+            border-radius: 50%;
+            /* Colors set via JS */
+        }
+        
+        .controls-hint {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .key {
+            border: 1px solid white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.1);
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2.5rem; }
+            .bird-selector { gap: 10px; }
+            .btn { font-size: 1.2rem; padding: 12px 30px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="hud">
+            <div class="stat-box">SCORE: <span id="score-val">0</span></div>
+            <div class="stat-box">SPEED: <span id="speed-val">0</span> km/h</div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="overlay">
+            <h1>Sky Rush</h1>
+            <p>Select your racer and avoid obstacles.<br>Collect golden worms for speed boosts!</p>
+            
+            <div class="bird-selector">
+                <div class="bird-card selected" onclick="selectBird('eagle')" id="card-eagle">
+                    <div class="bird-preview" style="background: #a52a2a;"></div>
+                    <div>Eagle</div>
+                    <small>Balanced</small>
+                </div>
+                <div class="bird-card" onclick="selectBird('falcon')" id="card-falcon">
+                    <div class="bird-preview" style="background: #4169e1;"></div>
+                    <div>Falcon</div>
+                    <small>Agile</small>
+                </div>
+                <div class="bird-card" onclick="selectBird('duck')" id="card-duck">
+                    <div class="bird-preview" style="background: #228b22;"></div>
+                    <div>Mallard</div>
+                    <small>Steady</small>
+                </div>
+            </div>
+
+            <button class="btn" onclick="startGame()">Start Race</button>
+            <div class="controls-hint">
+                <span><span class="key">←</span> <span class="key">→</span> to Steer</span>
+                <span><span class="key">SPACE</span> to Boost</span>
+            </div>
+            <p style="font-size: 0.8rem; margin-top:10px;">(Tap left/right side on mobile)</p>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="overlay hidden">
+            <h1>CRASHED!</h1>
+            <p>You hit an obstacle.</p>
+            <div id="final-score">0</div>
+            <button class="btn" onclick="resetGame()">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * MINI RACING GAME: SKY RUSH
+         * A pseudo-3D racer using HTML5 Canvas.
+         * Concept: Objects scale based on Z-depth to simulate 3rd person perspective.
+         */
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        // Game State
+        let isPlaying = false;
+        let isGameOver = false;
+        let score = 0;
+        let frameCount = 0;
+        let lastTime = 0;
+        let deltaTime = 0;
+
+        // Audio Context (Tone.js)
+        let synth, noiseSynth, collectSynth;
+        let isAudioInit = false;
+
+        // Player Config
+        const birds = {
+            eagle: { color: '#8B4513', secondary: '#DEB887', speed: 1.0, handling: 1.0 },
+            falcon: { color: '#4169E1', secondary: '#E0FFFF', speed: 1.2, handling: 0.8 },
+            duck: { color: '#228B22', secondary: '#32CD32', speed: 0.9, handling: 1.3 }
+        };
+        let currentBirdType = 'eagle';
+        
+        // Player State
+        const player = {
+            x: 0, // -1 to 1 (screen width normalized)
+            y: 0.8, // Fixed vertical position
+            speed: 0,
+            maxSpeed: 100, // Virtual Units
+            tilt: 0,
+            width: 0.1, // Normalized width
+            z: 0
+        };
+
+        // World State
+        let obstacles = [];
+        let particles = [];
+        let roadOffset = 0;
+        const segmentLength = 100;
+        const viewDistance = 2000;
+        
+        // Input
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            a: false,
+            d: false,
+            " ": false // Space
+        };
+
+        // --- Initialization ---
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Audio System ---
+        
+        async function initAudio() {
+            if(isAudioInit) return;
+            await Tone.start();
+            
+            // Engine/Wind drone
+            const filter = new Tone.AutoFilter({
+                frequency: 1,
+                baseFrequency: 200,
+                octaves: 2.6
+            }).toDestination().start();
+            
+            noiseSynth = new Tone.NoiseSynth({
+                noise: { type: "pink" },
+                envelope: { attack: 0.5, decay: 0.1, sustain: 0.5, release: 1 }
+            }).connect(filter);
+            noiseSynth.volume.value = -20;
+
+            // Crash Sound
+            synth = new Tone.MembraneSynth().toDestination();
+
+            // Coin Collect
+            collectSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+            collectSynth.volume.value = -10;
+
+            isAudioInit = true;
+        }
+
+        // --- Game Logic ---
+
+        function selectBird(type) {
+            currentBirdType = type;
+            document.querySelectorAll('.bird-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById(`card-${type}`).classList.add('selected');
+        }
+
+        function startGame() {
+            initAudio();
+            if(isAudioInit) noiseSynth.triggerAttack();
+            
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            
+            // Reset Vars
+            score = 0;
+            player.x = 0;
+            player.speed = 20; // Start moving
+            player.maxSpeed = 100 * birds[currentBirdType].speed;
+            
+            obstacles = [];
+            particles = [];
+            isPlaying = true;
+            isGameOver = false;
+            
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            document.getElementById('game-over-screen').classList.add('hidden');
+            startGame();
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            isGameOver = true;
+            if(isAudioInit) {
+                noiseSynth.triggerRelease();
+                synth.triggerAttackRelease("C1", "8n");
+            }
+            document.getElementById('final-score').innerText = Math.floor(score);
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+
+        // --- Input Handling ---
+
+        window.addEventListener('keydown', (e) => {
+            if(keys.hasOwnProperty(e.key)) keys[e.key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if(keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+        
+        // Touch controls
+        window.addEventListener('touchstart', (e) => {
+            const touchX = e.touches[0].clientX;
+            if(touchX < width / 2) keys.ArrowLeft = true;
+            else keys.ArrowRight = true;
+        });
+        window.addEventListener('touchend', () => {
+            keys.ArrowLeft = false;
+            keys.ArrowRight = false;
+        });
+
+        // --- Spawning Logic ---
+
+        function spawnObstacle() {
+            // Chance based on speed
+            if (Math.random() < 0.05 + (player.speed / 5000)) {
+                const type = Math.random() > 0.3 ? 'tree' : (Math.random() > 0.5 ? 'rock' : 'coin');
+                const xPos = (Math.random() * 4) - 2; // -2 to 2 range
+                
+                obstacles.push({
+                    x: xPos,
+                    y: 0, // Ground level
+                    z: viewDistance,
+                    type: type,
+                    active: true
+                });
+            }
+            
+            // Clouds
+            if (Math.random() < 0.02) {
+                obstacles.push({
+                    x: (Math.random() * 6) - 3,
+                    y: -1.5 - Math.random(), // In the sky
+                    z: viewDistance,
+                    type: 'cloud',
+                    active: false // No collision
+                });
+            }
+        }
+
+        // --- Physics & Updates ---
+
+        function update(dt) {
+            if (!isPlaying) return;
+
+            // Speed handling
+            let targetSpeed = 60 * birds[currentBirdType].speed;
+            if (keys[" "]) targetSpeed = 120 * birds[currentBirdType].speed; // Boost
+            
+            player.speed += (targetSpeed - player.speed) * dt;
+            score += (player.speed * dt) / 10;
+            
+            // Audio engine pitch
+            if(isAudioInit && noiseSynth) {
+                // Not easily pitchable, but we can modulate volume slightly
+                noiseSynth.volume.rampTo(-20 + (player.speed/100)*5, 0.1);
+            }
+
+            // Movement
+            const moveSpeed = 2.0 * dt * birds[currentBirdType].handling;
+            if (keys.ArrowLeft || keys.a) {
+                player.x -= moveSpeed;
+                player.tilt = Math.max(player.tilt - 0.1, -0.5);
+            } else if (keys.ArrowRight || keys.d) {
+                player.x += moveSpeed;
+                player.tilt = Math.min(player.tilt + 0.1, 0.5);
+            } else {
+                player.tilt *= 0.9; // Return to center
+            }
+
+            // Clamp player X
+            player.x = Math.max(-1.8, Math.min(1.8, player.x));
+
+            // Move Obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obj = obstacles[i];
+                obj.z -= player.speed * 10 * dt;
+
+                // Collision Detection
+                // Player is at z=0 approx. Check if object is close in Z and X
+                if (obj.active && obj.z < 50 && obj.z > -50) {
+                    // Check X overlap
+                    const playerWidth = 0.2; // Hitbox width
+                    const objWidth = obj.type === 'coin' ? 0.2 : 0.3;
+                    
+                    if (Math.abs(obj.x - player.x) < (playerWidth + objWidth)) {
+                        if (obj.type === 'coin') {
+                            // Collect
+                            score += 500;
+                            if(isAudioInit) collectSynth.triggerAttackRelease(["C5", "E5"], "16n");
+                            obstacles.splice(i, 1);
+                            // Add visuals
+                            for(let p=0; p<10; p++) {
+                                particles.push({
+                                    x: obj.x, y: 0, z: obj.z,
+                                    vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2,
+                                    life: 1.0, color: '#FFD700'
+                                });
+                            }
+                            continue;
+                        } else {
+                            // Crash
+                            gameOver();
+                        }
+                    }
+                }
+
+                if (obj.z < -100) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Particles
+            for(let i = particles.length -1; i>=0; i--) {
+                let p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.z -= player.speed * 10 * dt;
+                p.life -= dt * 2;
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+
+            spawnObstacle();
+
+            // Update DOM
+            document.getElementById('score-val').innerText = Math.floor(score);
+            document.getElementById('speed-val').innerText = Math.floor(player.speed);
+        }
+
+        // --- Rendering ---
+
+        function drawSky(ctx) {
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, "#1e90ff");
+            gradient.addColorStop(0.5, "#87cefa");
+            gradient.addColorStop(1, "#e0f7fa");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        function drawGround(ctx) {
+            // Horizon line is exactly center for simple pseudo 3D
+            const horizonY = height / 2;
+            
+            // Draw ground plane
+            const gGrad = ctx.createLinearGradient(0, horizonY, 0, height);
+            gGrad.addColorStop(0, "#2d3436");
+            gGrad.addColorStop(1, "#636e72");
+            ctx.fillStyle = gGrad;
+            ctx.fillRect(0, horizonY, width, height / 2);
+
+            // Draw grid lines to simulate speed
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+            ctx.lineWidth = 2;
+            
+            // Moving horizontal lines
+            const timeOffset = (Date.now() / 1000 * player.speed) % 100;
+            for (let z = 10; z < viewDistance; z += 50) {
+                // Pseudo perspective projection for Z
+                // We want lines to bunch up at horizon
+                let pz = z - timeOffset;
+                if (pz < 10) pz += 100; 
+                
+                // Simple 1/z projection
+                const scale = 200 / (pz); 
+                const screenY = horizonY + (100 * scale); // 100 is camera height
+                
+                if(screenY > height) continue;
+                if(screenY < horizonY) continue;
+
+                ctx.beginPath();
+                ctx.moveTo(0, screenY);
+                ctx.lineTo(width, screenY);
+                ctx.stroke();
+            }
+
+            // Radial lines (perspective)
+            for(let x = -10; x <= 10; x+=2) {
+                const centerX = width / 2;
+                // Bottom point
+                const bX = centerX + (x * width);
+                ctx.beginPath();
+                ctx.moveTo(centerX, horizonY);
+                ctx.lineTo(bX, height);
+                ctx.stroke();
+            }
+        }
+
+        /**
+         * Project 3D world coord to 2D screen coord
+         * x: world x (-2 to 2 approx)
+         * y: world y (positive is up)
+         * z: depth
+         */
+        function project(x, y, z) {
+            // Camera params
+            const fov = 300;
+            const cameraHeight = 150;
+            const cameraZ = -50; // Camera behind player
+            
+            const scale = fov / (z - cameraZ);
+            
+            const screenX = (width / 2) + (x * scale * 200); // 200 is world width scalar
+            const screenY = (height / 2) - ((y * 200) * scale) + (cameraHeight * scale); // 200 world height scalar
+            
+            return { x: screenX, y: screenY, s: scale };
+        }
+
+        function drawBird(ctx) {
+            const centerX = width / 2;
+            // Bird is visually fixed somewhat, but we simulate movement by moving world
+            // Actually, in this simple view, let's move the bird slightly based on x
+            // to show strafing relative to camera
+            
+            const screenX = centerX + (player.x * 50); 
+            const screenY = height - 150; 
+            const size = 60;
+
+            ctx.save();
+            ctx.translate(screenX, screenY);
+            ctx.rotate(player.tilt);
+
+            // Bird colors
+            const cMain = birds[currentBirdType].color;
+            const cSec = birds[currentBirdType].secondary;
+
+            // Body
+            ctx.fillStyle = cMain;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, size, size/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(size/1.5, -size/4, size/2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Beak
+            ctx.fillStyle = "orange";
+            ctx.beginPath();
+            ctx.moveTo(size + 10, -size/4);
+            ctx.lineTo(size + 30, -size/8);
+            ctx.lineTo(size + 10, 0);
+            ctx.fill();
+
+            // Eye
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(size/1.3, -size/3, 8, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = "black";
+            ctx.beginPath();
+            ctx.arc(size/1.3 + 2, -size/3, 3, 0, Math.PI*2);
+            ctx.fill();
+
+            // Wings (Animated)
+            const flapSpeed = 0.2 + (player.speed / 200);
+            const flap = Math.sin(Date.now() * 0.01 * player.speed); // Flap faster with speed
+            const wingY = flap * 20;
+
+            ctx.fillStyle = cSec;
+            // Far wing
+            ctx.beginPath();
+            ctx.moveTo(-size/2, -10);
+            ctx.lineTo(-size, -50 - wingY);
+            ctx.lineTo(size/2, -20);
+            ctx.fill();
+
+            // Near wing (draw over body logic would require separate layers, but simple is fine)
+            ctx.fillStyle = cMain; // Back to main for inner wing
+            ctx.beginPath();
+            ctx.moveTo(-size/2, 0);
+            ctx.lineTo(-size - 10, -60 + wingY); // Inverted flap for near wing visual
+            ctx.lineTo(size/2, 10);
+            ctx.fill();
+
+            // Tail
+            ctx.fillStyle = cSec;
+            ctx.beginPath();
+            ctx.moveTo(-size, 0);
+            ctx.lineTo(-size-30, -10);
+            ctx.lineTo(-size-30, 10);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawObstacle(ctx, obj) {
+            const p = project(obj.x, obj.y, obj.z);
+            const size = 100 * p.s;
+
+            if (p.y > height + size || p.y < -size) return;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+
+            if (obj.type === 'tree') {
+                // Trunk
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(-size/4, -size, size/2, size);
+                // Leaves
+                ctx.fillStyle = '#228B22';
+                ctx.beginPath();
+                ctx.arc(0, -size, size/1.2, 0, Math.PI*2);
+                ctx.fill();
+            } else if (obj.type === 'rock') {
+                ctx.fillStyle = '#636e72';
+                ctx.beginPath();
+                ctx.arc(0, -size/4, size/2, 0, Math.PI, true);
+                ctx.fill();
+            } else if (obj.type === 'coin') {
+                ctx.fillStyle = '#FFD700';
+                ctx.strokeStyle = '#FFA500';
+                ctx.lineWidth = 3;
+                // Spin animation
+                const scaleX = Math.abs(Math.sin(Date.now() * 0.005));
+                
+                ctx.beginPath();
+                ctx.ellipse(0, -size/2, size/3 * scaleX, size/3, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Shine
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(-size/10 * scaleX, -size/1.5, size/10, 0, Math.PI*2);
+                ctx.fill();
+            } else if (obj.type === 'cloud') {
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.beginPath();
+                ctx.arc(0, 0, size, 0, Math.PI*2);
+                ctx.arc(size, -size/4, size*0.8, 0, Math.PI*2);
+                ctx.arc(-size, -size/4, size*0.8, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+        
+        function drawParticles(ctx) {
+            particles.forEach(p => {
+                const proj = project(p.x, p.y, p.z);
+                const size = 20 * proj.s * p.life;
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(proj.x, proj.y, size, 0, Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            });
+        }
+
+        function gameLoop(timestamp) {
+            deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            // Update
+            update(deltaTime);
+
+            // Draw
+            ctx.clearRect(0, 0, width, height);
+
+            drawSky(ctx);
+            drawGround(ctx); // Floor
+
+            // Sort obstacles by Z (far to near) for painter's algorithm
+            obstacles.sort((a, b) => b.z - a.z);
+
+            obstacles.forEach(obj => drawObstacle(ctx, obj));
+            drawParticles(ctx);
+            
+            if(!isGameOver) {
+                drawBird(ctx);
+            }
+
+            if (isPlaying) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Start Initial Render for Menu Background
+        resize();
+        drawSky(ctx);
+        drawGround(ctx);
+        // Draw a demo bird
+        player.tilt = 0.2;
+        drawBird(ctx);
+
+    </script>
+</body>
+</html>
